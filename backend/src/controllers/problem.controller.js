@@ -1,4 +1,7 @@
 const Problem = require('../models/Problem');
+const Conversation = require('../models/Conversation');
+const Submission = require('../models/Submission');
+const mongoose = require('mongoose');
 const { updateDraftSchema, generateProblemInputSchema } = require('../validators/problem.schema');
 const { generateAndValidateProblem } = require('../services/ai/problemGenerator.service');
 const { successResponse, errorResponse } = require('../utils/response');
@@ -11,11 +14,27 @@ const getProblems = async (req, res, next) => {
       filter.isSaved = true;
     }
 
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    if (req.query.cursor) {
+      const decoded = JSON.parse(Buffer.from(req.query.cursor, 'base64url').toString('utf8'));
+      const cursorDate = new Date(decoded.updatedAt);
+      filter.$or = [
+        { updatedAt: { $lt: cursorDate } },
+        { updatedAt: cursorDate, _id: { $lt: decoded.id } },
+      ];
+    }
     const problems = await Problem.find(filter)
-      .sort({ updatedAt: -1 })
-      .select('-hiddenTests -referenceSolution -validation');
+      .sort({ updatedAt: -1, _id: -1 })
+      .select('title slug difficulty topic tags isSaved createdAt updatedAt')
+      .limit(limit + 1);
+    const hasMore = problems.length > limit;
+    const page = problems.slice(0, limit);
+    const last = page[page.length - 1];
+    const nextCursor = hasMore && last
+      ? Buffer.from(JSON.stringify({ updatedAt: last.updatedAt, id: last._id })).toString('base64url')
+      : null;
 
-    return successResponse(res, problems);
+    return successResponse(res, { items: page, nextCursor, hasMore });
   } catch (error) {
     next(error);
   }
@@ -56,12 +75,17 @@ const updateDraft = async (req, res, next) => {
       return errorResponse(res, 'FORBIDDEN', 'You do not have permission to modify this problem', 403);
     }
 
-    problem.latestDraftCode = validatedData.code;
-    await problem.save();
+    const revision = validatedData.revision ?? problem.draftRevision + 1;
+    const updatedProblem = await Problem.findOneAndUpdate(
+      { _id: req.params.id, ownerId: req.user._id, draftRevision: { $lt: revision } },
+      { $set: { latestDraftCode: validatedData.code, draftRevision: revision } },
+      { new: true }
+    );
 
     return successResponse(res, {
       message: 'Draft saved successfully',
-      updatedAt: problem.updatedAt,
+      updatedAt: updatedProblem?.updatedAt || problem.updatedAt,
+      revision: updatedProblem?.draftRevision || problem.draftRevision,
     });
   } catch (error) {
     next(error);
@@ -80,12 +104,19 @@ const toggleSave = async (req, res, next) => {
       return errorResponse(res, 'FORBIDDEN', 'You do not have permission to modify this problem', 403);
     }
 
-    problem.isSaved = !problem.isSaved;
-    await problem.save();
+    const requestedIsSaved = req.body?.isSaved;
+    if (typeof requestedIsSaved !== 'boolean') {
+      return errorResponse(res, 'VALIDATION_ERROR', 'isSaved must be a boolean', 400);
+    }
+    const updatedProblem = await Problem.findOneAndUpdate(
+      { _id: req.params.id, ownerId: req.user._id },
+      { $set: { isSaved: requestedIsSaved } },
+      { new: true }
+    );
 
     return successResponse(res, {
-      isSaved: problem.isSaved,
-      message: problem.isSaved ? 'Problem saved' : 'Problem unsaved',
+      isSaved: updatedProblem.isSaved,
+      message: updatedProblem.isSaved ? 'Problem saved' : 'Problem unsaved',
     });
   } catch (error) {
     next(error);
@@ -104,7 +135,16 @@ const deleteProblem = async (req, res, next) => {
       return errorResponse(res, 'FORBIDDEN', 'You do not have permission to delete this problem', 403);
     }
 
-    await Problem.findByIdAndDelete(req.params.id);
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await Conversation.deleteMany({ problemId: problem._id }, { session });
+        await Submission.deleteMany({ problemId: problem._id }, { session });
+        await Problem.deleteOne({ _id: problem._id, ownerId: req.user._id }, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
 
     return successResponse(res, { message: 'Problem deleted successfully' });
   } catch (error) {

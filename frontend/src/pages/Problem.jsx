@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import WorkspaceLayout from '../components/workspace/WorkspaceLayout';
 import { getProblemById, saveDraft, toggleSaveProblem } from '../services/problem.api';
+import { executeProblem } from '../services/execution.api';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function Problem() {
@@ -22,11 +23,14 @@ export default function Problem() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [saveError, setSaveError] = useState(null);
 
   const [chatMessages, setChatMessages] = useState([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
   const debounceTimerRef = useRef(null);
+  const draftRevisionRef = useRef(0);
+  const saveQueueRef = useRef(Promise.resolve());
 
   // Load problem details from backend
   useEffect(() => {
@@ -38,7 +42,7 @@ export default function Problem() {
         const data = await getProblemById(id);
         if (isMounted) {
           setProblem(data);
-          setCode(data.latestDraftCode || data.starterCode);
+          setCode(data.latestDraftCode ?? data.starterCode);
           if (data.updatedAt) {
             setLastSavedAt(data.updatedAt);
           }
@@ -78,15 +82,22 @@ export default function Problem() {
       clearTimeout(debounceTimerRef.current);
     }
 
-    debounceTimerRef.current = setTimeout(async () => {
-      try {
-        await saveDraft(id, newCode);
-        setLastSavedAt(Date.now());
-      } catch (err) {
-        console.error('Failed to autosave draft:', err);
-      } finally {
-        setIsSaving(false);
-      }
+    const revision = ++draftRevisionRef.current;
+    debounceTimerRef.current = setTimeout(() => {
+      saveQueueRef.current = saveQueueRef.current.then(async () => {
+        try {
+          const response = await saveDraft(id, newCode, revision);
+          if (response.revision === revision) {
+            setLastSavedAt(response.updatedAt || Date.now());
+            setSaveError(null);
+          }
+        } catch (err) {
+          console.error('Failed to autosave draft:', err);
+          setSaveError(err.message || 'Draft autosave failed');
+        } finally {
+          if (revision === draftRevisionRef.current) setIsSaving(false);
+        }
+      });
     }, 800);
   };
 
@@ -98,7 +109,7 @@ export default function Problem() {
 
   const handleSaveToggle = async () => {
     try {
-      const res = await toggleSaveProblem(id);
+      const res = await toggleSaveProblem(id, !problem.isSaved);
       setProblem((prev) => ({
         ...prev,
         isSaved: res.isSaved,
@@ -108,46 +119,32 @@ export default function Problem() {
     }
   };
 
-  const handleRun = (customTests) => {
+  const handleRun = async (customTests) => {
     setIsRunning(true);
     setRunResult(null);
     setSubmitResult(null);
-    setConsoleOutput('Compiling Solution.cpp with g++ -std=c++17...\nCompilation successful.\nEvaluating visible test harness...\n');
-
-    setTimeout(() => {
-      setIsRunning(false);
-      setRunResult({
-        type: 'run',
-        testResults: problem.visibleTests?.map((t, idx) => ({
-          id: t.id || `case-${idx + 1}`,
-          input: t.input,
-          expectedOutput: t.expectedOutput,
-          actualOutput: t.expectedOutput,
-          passed: true,
-        })) || [],
-      });
-      setConsoleOutput((prev) => prev + `\nCompleted execution for ${problem.visibleTests?.length || 0} visible test cases.`);
-    }, 1200);
+    setConsoleOutput('Running solution in Docker sandbox...\n');
+    try {
+      const result = await executeProblem(id, { code, customTests });
+      setRunResult({ type: 'run', ...result });
+      setConsoleOutput((prev) => prev + `\nStatus: ${result.status}`);
+    } catch (err) {
+      setConsoleError(err.message || 'Execution failed');
+    } finally { setIsRunning(false); }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setIsSubmitting(true);
     setSubmitResult(null);
     setRunResult(null);
-    setConsoleOutput('Initiating Docker runner container...\nCompiling Solution.cpp...\nEvaluating hidden test suite...\n');
-
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmitResult({
-        type: 'submit',
-        status: 'ACCEPTED',
-        passedTests: 20,
-        totalTests: 20,
-        runtimeMs: 14,
-        memoryKb: 14600,
-      });
-      setConsoleOutput((prev) => prev + '\nStatus: ACCEPTED (Passed all tests)');
-    }, 1500);
+    setConsoleOutput('Submitting to Docker sandbox...\n');
+    try {
+      const result = await executeProblem(id, { code, submit: true });
+      setSubmitResult({ type: 'submit', ...result });
+      setConsoleOutput((prev) => prev + `\nStatus: ${result.status}`);
+    } catch (err) {
+      setConsoleError(err.message || 'Submission failed');
+    } finally { setIsSubmitting(false); }
   };
 
   const handleAskHint = (level) => {
@@ -229,6 +226,7 @@ export default function Problem() {
       submitResult={submitResult}
       consoleOutput={consoleOutput}
       consoleError={consoleError}
+      saveError={saveError}
       isSaving={isSaving}
       lastSavedAt={lastSavedAt}
       onSaveToggle={handleSaveToggle}

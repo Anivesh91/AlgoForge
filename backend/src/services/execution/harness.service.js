@@ -123,13 +123,14 @@ void printValue(const vector<vector<T>>& mat) {
 /**
  * Generates the complete compilable C++ code including user code and the test harness main()
  */
-function generateHarnessCode(userCode, functionSpec, tests, supportCode = '') {
+function generateHarnessCode(userCode, functionSpec, tests, supportCode = '', protocolToken = '') {
   const { name: funcName, returnType, parameters } = functionSpec;
 
   let testCasesCode = '';
 
   tests.forEach((test, idx) => {
     const testId = test.id || `case-${idx + 1}`;
+    const serializedTestId = toCppLiteral(String(testId), 'string');
     const testExpectedLiteral = toCppLiteral(test.expectedOutput, returnType);
 
     // Build parameter declarations
@@ -162,7 +163,13 @@ ${paramInits}
         bool passed = (actual == expected);
 
         cout << "__ALGOFORGE_CASE_START__" << endl;
-        cout << "{\\"id\\": \\"${testId}\\", \\"passed\\": " << (passed ? "true" : "false")
+        const string caseId = ${serializedTestId};
+        const string protocol = ${toCppLiteral(protocolToken, 'string')};
+        cout << "{\\"id\\": ";
+        printValue(caseId);
+        cout << ", \\"protocol\\": ";
+        printValue(protocol);
+        cout << ", \\"passed\\": " << (passed ? "true" : "false")
              << ", \\"runtimeMs\\": " << elapsed_ms
              << ", \\"actualOutput\\": ";
         printValue(actual);

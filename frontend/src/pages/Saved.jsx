@@ -13,7 +13,7 @@ export default function Saved() {
       setLoading(true);
       setError(null);
       const data = await getProblems({ saved: true });
-      setProblems(data);
+      setProblems(data.items || data);
     } catch (err) {
       setError(err.message || 'Failed to load saved problems');
     } finally {
@@ -29,7 +29,7 @@ export default function Saved() {
     e.preventDefault();
     e.stopPropagation();
     try {
-      await toggleSaveProblem(id);
+      await toggleSaveProblem(id, false);
       setProblems((prev) => prev.filter((p) => p._id !== id));
     } catch (err) {
       alert(err.message || 'Failed to update saved problem');
@@ -74,7 +74,7 @@ export default function Saved() {
         </div>
       )}
 
-      {problems.length === 0 ? (
+      {problems.length === 0 && !error ? (
         <div className="p-12 text-center bg-dark-800/50 border border-dark-600 rounded-2xl max-w-xl mx-auto">
           <BookmarkX className="w-12 h-12 text-gray-600 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-white mb-2">No Saved Problems</h3>
@@ -92,9 +92,8 @@ export default function Saved() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {problems.map((prob) => (
-            <Link
+            <div
               key={prob._id}
-              to={`/problem/${prob._id}`}
               className="p-5 bg-dark-800 hover:bg-dark-750 border border-dark-600 hover:border-blue-500/40 rounded-2xl transition group flex flex-col justify-between"
             >
               <div>
@@ -115,19 +114,17 @@ export default function Saved() {
                   </button>
                 </div>
 
-                <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition mb-1.5">
-                  {prob.title}
-                </h3>
-                <p className="text-xs text-gray-400 line-clamp-2 mb-3">
-                  {prob.description}
-                </p>
+                <Link to={`/problem/${prob._id}`} className="block">
+                  <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition mb-1.5">{prob.title}</h3>
+                  <p className="text-xs text-gray-400 line-clamp-2 mb-3">{prob.description}</p>
+                </Link>
               </div>
 
               <div className="pt-3 border-t border-dark-700/60 flex items-center justify-between text-xs text-gray-500">
                 <span>{prob.topic || 'General DSA'}</span>
                 <span>{new Date(prob.createdAt).toLocaleDateString()}</span>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}

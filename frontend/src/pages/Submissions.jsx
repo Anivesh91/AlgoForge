@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getSubmissions } from '../services/submission.api';
 import { Code2, Clock, CheckCircle2, XCircle, AlertTriangle, Loader2, X, Eye } from 'lucide-react';
@@ -8,6 +8,29 @@ export default function Submissions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedSub, setSelectedSub] = useState(null);
+  const modalRef = useRef(null);
+  const triggerRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedSub) {
+      triggerRef.current?.focus();
+      return undefined;
+    }
+    modalRef.current?.focus();
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setSelectedSub(null);
+      if (event.key === 'Tab' && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll('button, [tabindex]:not([tabindex="-1"])');
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSub]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -15,7 +38,7 @@ export default function Submissions() {
         setLoading(true);
         setError(null);
         const data = await getSubmissions();
-        setSubmissions(data);
+        setSubmissions(data.items || data);
       } catch (err) {
         setError(err.message || 'Failed to load submissions');
       } finally {
@@ -81,7 +104,7 @@ export default function Submissions() {
         </div>
       )}
 
-      {submissions.length === 0 ? (
+      {submissions.length === 0 && !error ? (
         <div className="p-12 text-center bg-dark-800/50 border border-dark-600 rounded-2xl max-w-xl mx-auto">
           <Clock className="w-12 h-12 text-gray-600 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-white mb-2">No Submissions Yet</h3>
@@ -136,7 +159,7 @@ export default function Submissions() {
                     </td>
                     <td className="py-4 px-6 text-right">
                       <button
-                        onClick={() => setSelectedSub(sub)}
+                        onClick={(event) => { triggerRef.current = event.currentTarget; setSelectedSub(sub); }}
                         className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-medium p-1 rounded hover:bg-dark-700 transition"
                       >
                         <Eye className="w-3.5 h-3.5" /> View Code
@@ -152,17 +175,18 @@ export default function Submissions() {
 
       {/* Code Inspection Modal */}
       {selectedSub && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-dark-800 border border-dark-600 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setSelectedSub(null)}>
+          <div ref={modalRef} className="bg-dark-800 border border-dark-600 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]" role="dialog" aria-modal="true" aria-labelledby="submission-code-title" tabIndex={-1}>
             <div className="p-4 border-b border-dark-600 flex items-center justify-between bg-dark-900">
               <div className="flex items-center gap-3">
-                <span className="text-sm font-bold text-white">
+                <span id="submission-code-title" className="text-sm font-bold text-white">
                   {selectedSub.problemId?.title || 'Submitted Code'}
                 </span>
                 {getStatusBadge(selectedSub.status)}
               </div>
               <button
                 onClick={() => setSelectedSub(null)}
+                aria-label="Close submitted code"
                 className="text-gray-400 hover:text-white p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />

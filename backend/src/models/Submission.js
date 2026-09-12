@@ -34,8 +34,8 @@ const submissionSchema = new mongoose.Schema(
         'TIME_LIMIT_EXCEEDED',
         'MEMORY_LIMIT_EXCEEDED',
         'INTERNAL_ERROR',
+        'JUDGE_ERROR',
       ],
-      default: 'ACCEPTED',
     },
     passedTests: {
       type: Number,

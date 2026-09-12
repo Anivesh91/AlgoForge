@@ -10,13 +10,13 @@ export const getProblemById = async (id) => {
   return response.data;
 };
 
-export const saveDraft = async (id, code) => {
-  const response = await api.patch(`/problems/${id}/draft`, { code });
+export const saveDraft = async (id, code, revision) => {
+  const response = await api.patch(`/problems/${id}/draft`, { code, revision });
   return response.data;
 };
 
-export const toggleSaveProblem = async (id) => {
-  const response = await api.post(`/problems/${id}/save`);
+export const toggleSaveProblem = async (id, isSaved) => {
+  const response = await api.post(`/problems/${id}/save`, { isSaved });
   return response.data;
 };
 

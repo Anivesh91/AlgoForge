@@ -134,6 +134,10 @@ const problemSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    draftRevision: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -143,6 +147,7 @@ const problemSchema = new mongoose.Schema(
 // Indexes specified in Blueprint Section 10.5
 problemSchema.index({ ownerId: 1, createdAt: -1 });
 problemSchema.index({ ownerId: 1, isSaved: 1, updatedAt: -1 });
+problemSchema.index({ ownerId: 1, updatedAt: -1, _id: -1 });
 
 // Helper to sanitize payload for public/frontend consumption
 // Strips hiddenTests, referenceSolution, and internal validation details

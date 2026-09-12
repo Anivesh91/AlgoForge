@@ -1,10 +1,11 @@
 const { generateHarnessCode } = require('./harness.service');
 const { executeInSandbox } = require('./docker.service');
+const crypto = require('crypto');
 
 /**
  * Parses individual test case JSON outputs printed by the C++ harness
  */
-function parseCaseOutputs(stdout, tests) {
+function parseCaseOutputs(stdout, tests, protocolToken) {
   const caseRegex = /__ALGOFORGE_CASE_START__([\s\S]*?)__ALGOFORGE_CASE_END__/g;
   const parsedResults = [];
   let match;
@@ -19,9 +20,19 @@ function parseCaseOutputs(stdout, tests) {
     }
   }
 
-  // Merge with test definitions to attach original inputs
-  return tests.map((test, index) => {
-    const executed = parsedResults.find((r) => r.id === (test.id || `case-${index + 1}`)) || parsedResults[index];
+  const expectedIds = tests.map((test, index) => String(test.id || `case-${index + 1}`));
+  const actualIds = parsedResults.map((result) => result.id);
+  const validRecords = parsedResults.length === expectedIds.length
+    && parsedResults.every((result) => result.protocol === protocolToken)
+    && new Set(actualIds).size === actualIds.length
+    && actualIds.every((id) => expectedIds.includes(id));
+  if (!validRecords) {
+    return { error: 'Invalid or incomplete test result protocol', results: [] };
+  }
+
+  // Merge with test definitions only after protocol validation succeeds.
+  return { results: tests.map((test, index) => {
+    const executed = parsedResults.find((r) => r.id === expectedIds[index]);
     if (executed) {
       return {
         id: test.id || `case-${index + 1}`,
@@ -40,7 +51,7 @@ function parseCaseOutputs(stdout, tests) {
       expectedOutput: test.expectedOutput,
       actualOutput: null,
     };
-  });
+  }) };
 }
 
 /**
@@ -56,7 +67,7 @@ async function judgeSolution({
 }) {
   if (!tests || tests.length === 0) {
     return {
-      status: 'ACCEPTED',
+      status: 'JUDGE_ERROR',
       passedTests: 0,
       totalTests: 0,
       runtimeMs: 0,
@@ -66,7 +77,8 @@ async function judgeSolution({
   }
 
   // 1. Generate full C++ source with harness
-  const cppSource = generateHarnessCode(userCode, functionSpec, tests, supportCode);
+  const protocolToken = crypto.randomBytes(24).toString('hex');
+  const cppSource = generateHarnessCode(userCode, functionSpec, tests, supportCode, protocolToken);
 
   // 2. Execute within Docker sandbox
   const sandboxResult = await executeInSandbox({
@@ -129,7 +141,20 @@ async function judgeSolution({
   }
 
   // 4. Parse test results and calculate verdict
-  const testResults = parseCaseOutputs(sandboxResult.stdout, tests);
+  const parsedOutput = parseCaseOutputs(sandboxResult.stdout, tests, protocolToken);
+  if (parsedOutput.error) {
+    return {
+      status: 'JUDGE_ERROR',
+      passedTests: 0,
+      totalTests: tests.length,
+      runtimeMs: sandboxResult.runtimeMs,
+      memoryKb: 0,
+      compileOutput: '',
+      testResults: [],
+      stderr: parsedOutput.error,
+    };
+  }
+  const testResults = parsedOutput.results;
   const passedCount = testResults.filter((r) => r.passed).length;
   const isAllPassed = passedCount === tests.length && tests.length > 0;
 
@@ -138,7 +163,7 @@ async function judgeSolution({
     passedTests: passedCount,
     totalTests: tests.length,
     runtimeMs: sandboxResult.runtimeMs,
-    memoryKb: 14000 + Math.floor(Math.random() * 2000), // Estimated standard runtime memory
+    memoryKb: 0,
     compileOutput: '',
     testResults,
     stdout: sandboxResult.stdout,

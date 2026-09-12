@@ -3,6 +3,7 @@ const { z } = require('zod');
 const generateProblemInputSchema = z.object({
   prompt: z
     .string({ required_error: 'Problem description or prompt is required' })
+    .trim()
     .min(3, 'Prompt must be at least 3 characters')
     .max(2000, 'Prompt is too long'),
   difficulty: z.enum(['Easy', 'Medium', 'Hard']).optional().default('Medium'),
@@ -11,10 +12,11 @@ const generateProblemInputSchema = z.object({
 
 const updateDraftSchema = z.object({
   code: z.string({ required_error: 'Code is required' }),
+  revision: z.number().int().nonnegative().optional(),
 });
 
 const chatMessageSchema = z.object({
-  message: z.string().min(1, 'Message cannot be empty'),
+  message: z.string().trim().min(1, 'Message cannot be empty'),
   code: z.string().optional(),
   type: z.enum(['chat', 'hint', 'debug', 'review']).optional().default('chat'),
 });

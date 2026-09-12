@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import WorkspaceLayout from '../components/workspace/WorkspaceLayout';
 import { MOCK_PROBLEM } from '../components/workspace/mockProblem';
 import { generateProblem, saveDraft, toggleSaveProblem } from '../services/problem.api';
+import { executeProblem } from '../services/execution.api';
 
 export default function Workspace() {
   const [problem, setProblem] = useState(MOCK_PROBLEM);
@@ -90,72 +91,41 @@ export default function Workspace() {
     }
   };
 
-  const handleRun = (customTests) => {
+  const handleRun = async (customTests) => {
     setIsRunning(true);
     setRunResult(null);
     setSubmitResult(null);
-    setConsoleOutput('Compiling Solution.cpp with g++ -std=c++17...\nCompilation successful.\nExecuting test harness on visible tests...\n');
-
-    setTimeout(() => {
-      setIsRunning(false);
-      setRunResult({
-        type: 'run',
-        testResults: [
-          {
-            id: 'case-1',
-            input: { nums: [-2, 1, -3, 4, -1, 2, 1, -5, 4] },
-            expectedOutput: 6,
-            actualOutput: 6,
-            passed: true,
-          },
-          {
-            id: 'case-2',
-            input: { nums: [1] },
-            expectedOutput: 1,
-            actualOutput: 1,
-            passed: true,
-          },
-          {
-            id: 'case-3',
-            input: { nums: [5, 4, -1, 7, 8] },
-            expectedOutput: 23,
-            actualOutput: 23,
-            passed: true,
-          },
-        ],
-      });
-      setConsoleOutput((prev) => prev + '\nAll 3 visible test cases completed execution.');
-    }, 1200);
+    try {
+      if (problem._id.startsWith('mock-')) throw new Error('Generate a problem before running code.');
+      const result = await executeProblem(problem._id, { code, customTests });
+      setRunResult({ type: 'run', ...result });
+      setConsoleOutput((prev) => prev + `\nStatus: ${result.status}`);
+    } catch (err) { setConsoleError(err.message || 'Execution failed'); }
+    finally { setIsRunning(false); }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setIsSubmitting(true);
     setSubmitResult(null);
     setRunResult(null);
-    setConsoleOutput('Compiling Solution.cpp for submission in isolated Docker container...\nRunning 25 hidden evaluation tests...\n');
-
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmitResult({
-        type: 'submit',
-        status: 'ACCEPTED',
-        passedTests: 25,
-        totalTests: 25,
-        runtimeMs: 12,
-        memoryKb: 14200,
-      });
-      setConsoleOutput((prev) => prev + '\nStatus: ACCEPTED (Passed all 25 test cases)');
-    }, 1500);
+    setConsoleOutput('Submitting to Docker sandbox...\n');
+    try {
+      if (problem._id.startsWith('mock-')) throw new Error('Generate a problem before submitting code.');
+      const result = await executeProblem(problem._id, { code, submit: true });
+      setSubmitResult({ type: 'submit', ...result });
+      setConsoleOutput((prev) => prev + `\nStatus: ${result.status}`);
+    } catch (err) { setConsoleError(err.message || 'Submission failed'); }
+    finally { setIsSubmitting(false); }
   };
 
   const handleSaveToggle = async () => {
     if (!problem?._id || problem._id.startsWith('mock-')) return;
     try {
-      const res = await toggleSaveProblem(problem._id);
-      if (res && res.data) {
+      const res = await toggleSaveProblem(problem._id, !problem.isSaved);
+      if (res) {
         setProblem((prev) => ({
           ...prev,
-          isSaved: res.data.isSaved,
+          isSaved: res.isSaved,
         }));
       }
     } catch (err) {

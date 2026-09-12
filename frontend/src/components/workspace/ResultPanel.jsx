@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, Clock, AlertTriangle, Cpu, Play } from 'lucide-react';
 
 export default function ResultPanel({ result, isSubmitting, isRunning }) {
   const [selectedCaseTab, setSelectedCaseTab] = useState(0);
+  useEffect(() => setSelectedCaseTab(0), [result]);
 
   if (isRunning) {
     return (

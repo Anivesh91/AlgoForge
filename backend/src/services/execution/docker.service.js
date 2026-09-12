@@ -30,7 +30,7 @@ function truncateOutput(str, maxKb = MAX_OUTPUT_KB) {
   if (Buffer.byteLength(str, 'utf8') <= maxBytes) {
     return str;
   }
-  return str.slice(0, maxBytes) + '\n... [Output Truncated: Exceeded limit]';
+  return Buffer.from(str, 'utf8').subarray(0, maxBytes).toString('utf8') + '\n... [Output Truncated: Exceeded limit]';
 }
 
 /**
@@ -40,6 +40,7 @@ async function executeInSandbox({
   cppSource,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   memoryMb = DEFAULT_MEMORY_MB,
+  storageLimitMb = 64,
 }) {
   const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   const containerName = `algoforge_${jobId}`;
@@ -49,6 +50,7 @@ async function executeInSandbox({
   try {
     // 1. Prepare job directory and write C++ source
     await fs.mkdir(jobDir, { recursive: true });
+    await fs.chmod(jobDir, 0o777);
     const sourceFilePath = path.join(jobDir, 'solution.cpp');
     await fs.writeFile(sourceFilePath, cppSource, 'utf8');
 
@@ -57,10 +59,14 @@ async function executeInSandbox({
 
     // 2. Compilation phase inside container
     // Compile with g++ -O2 -std=c++17
-    const compileCmd = `docker run --rm --name ${containerName}_cmp -v "${dockerMountPath}:/sandbox" --network none --memory 512m --cpus 1.5 ${RUNNER_IMAGE} sh -c "g++ -O2 -std=c++17 /sandbox/solution.cpp -o /sandbox/solution 2>&1"`;
+    const storageLimitMb = parseInt(process.env.RUN_STORAGE_MB || '64', 10);
+    const compileCmd = `docker run --rm --name ${containerName}_cmp -v "${dockerMountPath}:/sandbox" --storage-opt size=${storageLimitMb}m --network none --memory 512m --cpus 1.5 ${RUNNER_IMAGE} sh -c "g++ -O2 -std=c++17 /sandbox/solution.cpp -o /sandbox/solution 2>&1"`;
     
     const compileStartTime = Date.now();
     const compileResult = await runCommand(compileCmd, { timeout: 15000 });
+    if (compileResult.error?.killed || compileResult.error?.code === 'ETIMEDOUT') {
+      await runCommand(`docker rm -f ${containerName}_cmp`);
+    }
     
     if (compileResult.error || !compileResult.stdout.includes('')) {
       // Check if binary was produced
@@ -78,7 +84,7 @@ async function executeInSandbox({
 
     // 3. Execution phase inside hardened container
     // Constraints: --net=none, --memory, --cpus, --pids-limit, no-new-privileges
-    const execCmd = `docker run --rm --name ${containerName} -v "${dockerMountPath}:/sandbox" --network none --memory ${memoryMb}m --memory-swap ${memoryMb}m --cpus 1.0 --pids-limit 64 --security-opt no-new-privileges ${RUNNER_IMAGE} sh -c "/sandbox/solution"`;
+    const execCmd = `docker run --rm --name ${containerName} -v "${dockerMountPath}:/sandbox" --storage-opt size=${storageLimitMb}m --network none --memory ${memoryMb}m --memory-swap ${memoryMb}m --cpus 1.0 --pids-limit 64 --security-opt no-new-privileges ${RUNNER_IMAGE} sh -c "/sandbox/solution"`;
 
     const execStartTime = Date.now();
     let isTimeout = false;
@@ -152,6 +158,7 @@ async function executeInSandbox({
     } catch (e) {}
     // Ensure container cleanup
     runCommand(`docker rm -f ${containerName}`).catch(() => {});
+    runCommand(`docker rm -f ${containerName}_cmp`).catch(() => {});
   }
 }
 

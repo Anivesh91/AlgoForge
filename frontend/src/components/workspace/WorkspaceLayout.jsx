@@ -46,7 +46,7 @@ export default function WorkspaceLayout({
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] flex flex-col md:flex-row bg-dark-900 overflow-hidden select-none">
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col md:flex-row bg-dark-900 overflow-y-auto md:overflow-hidden select-none">
       {/* LEFT PANEL: Problem Statement or AI Generator Input */}
       <div className="w-full md:w-1/2 h-full overflow-hidden flex flex-col">
         {problem ? (

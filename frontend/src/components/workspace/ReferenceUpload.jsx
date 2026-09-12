@@ -1,9 +1,7 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { Upload, X, FileText, Image as ImageIcon } from 'lucide-react';
 
 export default function ReferenceUpload({ attachment, onSelect, onClose }) {
-  const fileInputRef = useRef(null);
-
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -56,21 +54,23 @@ export default function ReferenceUpload({ attachment, onSelect, onClose }) {
           </button>
         </div>
       ) : (
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          className="border border-dashed border-dark-600 hover:border-blue-500/50 rounded-lg p-4 text-center cursor-pointer transition bg-dark-900/50 hover:bg-dark-900"
-        >
+        <>
           <input
-            ref={fileInputRef}
+            id="reference-file-input"
             type="file"
             accept="image/png,image/jpeg,image/webp,text/plain"
             onChange={handleFileChange}
             className="hidden"
           />
-          <Upload className="w-5 h-5 text-gray-500 mx-auto mb-1" />
-          <p className="text-xs text-gray-300 font-medium">Click to upload reference file</p>
-          <p className="text-[11px] text-gray-500">PNG, JPG, or TXT up to 5MB</p>
-        </div>
+          <label
+            htmlFor="reference-file-input"
+            className="block w-full border border-dashed border-dark-600 hover:border-blue-500/50 rounded-lg p-4 text-center cursor-pointer transition bg-dark-900/50 hover:bg-dark-900"
+          >
+            <Upload className="w-5 h-5 text-gray-500 mx-auto mb-1" />
+            <span className="block text-xs text-gray-300 font-medium">Click to upload reference file</span>
+            <span className="block text-[11px] text-gray-500">PNG, JPG, or TXT up to 5MB</span>
+          </label>
+        </>
       )}
     </div>
   );
