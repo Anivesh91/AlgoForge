@@ -5,6 +5,8 @@ const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
+const problemRoutes = require('./routes/problem.routes');
+const submissionRoutes = require('./routes/submission.routes');
 const { errorHandler, notFoundHandler } = require('./middleware/error.middleware');
 
 const app = express();
@@ -28,6 +30,8 @@ if (process.env.NODE_ENV !== 'test') {
 // API Routes
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/problems', problemRoutes);
+app.use('/api/submissions', submissionRoutes);
 
 // 404 & Global Error handling
 app.use(notFoundHandler);
