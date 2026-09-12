@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import WorkspaceLayout from '../components/workspace/WorkspaceLayout';
 import { MOCK_PROBLEM } from '../components/workspace/mockProblem';
+import { generateProblem, saveDraft, toggleSaveProblem } from '../services/problem.api';
 
 export default function Workspace() {
   const [problem, setProblem] = useState(MOCK_PROBLEM);
@@ -25,11 +26,25 @@ export default function Workspace() {
   const handleCodeChange = (newCode) => {
     setCode(newCode);
     setIsSaving(true);
-    // Simulate debounced draft autosave
-    setTimeout(() => {
-      setIsSaving(false);
-      setLastSavedAt(Date.now());
-    }, 800);
+
+    if (problem?._id && !problem._id.startsWith('mock-')) {
+      clearTimeout(window._draftSaveTimer);
+      window._draftSaveTimer = setTimeout(async () => {
+        try {
+          await saveDraft(problem._id, newCode);
+          setLastSavedAt(Date.now());
+        } catch (err) {
+          console.warn('Draft autosave failed:', err.message);
+        } finally {
+          setIsSaving(false);
+        }
+      }, 800);
+    } else {
+      setTimeout(() => {
+        setIsSaving(false);
+        setLastSavedAt(Date.now());
+      }, 800);
+    }
   };
 
   const handleResetCode = () => {
@@ -38,20 +53,41 @@ export default function Workspace() {
     }
   };
 
-  const handleGenerate = ({ prompt, difficulty, attachment }) => {
-    setIsGenerating(true);
-    setTimeout(() => {
-      setIsGenerating(false);
-      const newProblem = {
-        ...MOCK_PROBLEM,
-        _id: `problem-${Date.now()}`,
-        title: `Custom ${difficulty} DSA Challenge`,
-        userPrompt: prompt,
+  const handleGenerate = async ({ prompt, difficulty, attachment }) => {
+    try {
+      setIsGenerating(true);
+      setConsoleOutput(
+        'Contacting AI problem generation engine...\nFormulating problem specifications, test cases, and reference solution...\nExecuting Phase 4 reference solution self-validation loop in Docker sandbox...\n'
+      );
+      setConsoleError('');
+
+      const response = await generateProblem({
+        prompt,
         difficulty,
-      };
-      setProblem(newProblem);
-      setCode(newProblem.starterCode);
-    }, 1500);
+        topic: 'Algorithms & Data Structures',
+      });
+
+      if (response && response.data) {
+        const newProblem = response.data;
+        setProblem(newProblem);
+        setCode(newProblem.starterCode);
+        setRunResult(null);
+        setSubmitResult(null);
+        setConsoleOutput(
+          (prev) =>
+            prev +
+            `\nSuccess! Problem "${newProblem.title}" generated and validated with Docker sandbox.\nReady for your solution!`
+        );
+      }
+    } catch (err) {
+      console.error('Failed to generate problem:', err);
+      const errMsg =
+        err.response?.data?.error?.message || err.message || 'Failed to generate problem.';
+      setConsoleError(`Generation Error: ${errMsg}`);
+      setConsoleOutput((prev) => prev + `\n[FAILED]: ${errMsg}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleRun = (customTests) => {
@@ -112,11 +148,19 @@ export default function Workspace() {
     }, 1500);
   };
 
-  const handleSaveToggle = () => {
-    setProblem((prev) => ({
-      ...prev,
-      isSaved: !prev.isSaved,
-    }));
+  const handleSaveToggle = async () => {
+    if (!problem?._id || problem._id.startsWith('mock-')) return;
+    try {
+      const res = await toggleSaveProblem(problem._id);
+      if (res && res.data) {
+        setProblem((prev) => ({
+          ...prev,
+          isSaved: res.data.isSaved,
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to toggle save:', err);
+    }
   };
 
   const handleRegenerate = () => {

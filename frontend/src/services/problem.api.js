@@ -24,3 +24,9 @@ export const deleteProblem = async (id) => {
   const response = await api.delete(`/problems/${id}`);
   return response.data;
 };
+
+export const generateProblem = async (payload) => {
+  const response = await api.post('/problems/generate', payload);
+  return response.data;
+};
+

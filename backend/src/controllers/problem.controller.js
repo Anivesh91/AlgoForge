@@ -1,5 +1,6 @@
 const Problem = require('../models/Problem');
-const { updateDraftSchema } = require('../validators/problem.schema');
+const { updateDraftSchema, generateProblemInputSchema } = require('../validators/problem.schema');
+const { generateAndValidateProblem } = require('../services/ai/problemGenerator.service');
 const { successResponse, errorResponse } = require('../utils/response');
 
 // GET /api/problems
@@ -111,10 +112,29 @@ const deleteProblem = async (req, res, next) => {
   }
 };
 
+// POST /api/problems/generate
+const generateProblem = async (req, res, next) => {
+  try {
+    const validatedData = generateProblemInputSchema.parse(req.body);
+
+    const problem = await generateAndValidateProblem({
+      userId: req.user._id,
+      prompt: validatedData.prompt,
+      difficulty: validatedData.difficulty,
+      topic: validatedData.topic,
+    });
+
+    return successResponse(res, problem.toPublicJSON(), 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getProblems,
   getProblemById,
   updateDraft,
   toggleSave,
   deleteProblem,
+  generateProblem,
 };

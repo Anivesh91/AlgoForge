@@ -61,6 +61,15 @@ const HARNESS_UTILITIES = `
 #include <sstream>
 #include <chrono>
 #include <cmath>
+#include <unordered_map>
+#include <unordered_set>
+#include <map>
+#include <set>
+#include <queue>
+#include <stack>
+#include <deque>
+#include <numeric>
+#include <climits>
 
 using namespace std;
 
