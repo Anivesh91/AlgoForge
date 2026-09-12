@@ -13,7 +13,7 @@ export default function Saved() {
       setLoading(true);
       setError(null);
       const data = await getProblems({ saved: true });
-      setProblems(data.items || data);
+      setProblems(data?.items || data || []);
     } catch (err) {
       setError(err.message || 'Failed to load saved problems');
     } finally {

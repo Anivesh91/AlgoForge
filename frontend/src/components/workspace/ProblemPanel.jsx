@@ -8,6 +8,7 @@ export default function ProblemPanel({
   onRegenerate,
   onAskHint,
   onSendMessage,
+  onClearChat,
   chatMessages,
   isChatLoading,
 }) {
@@ -187,6 +188,7 @@ export default function ProblemPanel({
             messages={chatMessages}
             onAskHint={onAskHint}
             onSendMessage={onSendMessage}
+            onClearChat={onClearChat}
             isLoading={isChatLoading}
           />
         )}

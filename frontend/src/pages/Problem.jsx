@@ -1,8 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import WorkspaceLayout from '../components/workspace/WorkspaceLayout';
 import { getProblemById, saveDraft, toggleSaveProblem } from '../services/problem.api';
 import { executeProblem } from '../services/execution.api';
+import {
+  getConversation,
+  askHint,
+  sendChatMessage,
+  clearConversation,
+} from '../services/tutor.api';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function Problem() {
@@ -32,10 +38,10 @@ export default function Problem() {
   const draftRevisionRef = useRef(0);
   const saveQueueRef = useRef(Promise.resolve());
 
-  // Load problem details from backend
+  // Load problem details and stored conversation from backend
   useEffect(() => {
     let isMounted = true;
-    const loadProblem = async () => {
+    const loadProblemAndChat = async () => {
       try {
         setLoading(true);
         setError(null);
@@ -46,12 +52,30 @@ export default function Problem() {
           if (data.updatedAt) {
             setLastSavedAt(data.updatedAt);
           }
-          setChatMessages([
-            {
-              role: 'assistant',
-              content: `Problem loaded: "${data.title}". How can I help you approach this problem?`,
-            },
-          ]);
+
+          // Fetch stored conversation history
+          try {
+            const chatData = await getConversation(id);
+            if (chatData?.messages && chatData.messages.length > 0) {
+              setChatMessages(chatData.messages);
+            } else {
+              setChatMessages([
+                {
+                  role: 'assistant',
+                  type: 'chat',
+                  content: `Problem loaded: "${data.title}". How can I help you approach this challenge? Ask for progressive hints or code debugging advice anytime.`,
+                },
+              ]);
+            }
+          } catch (chatErr) {
+            setChatMessages([
+              {
+                role: 'assistant',
+                type: 'chat',
+                content: `Problem loaded: "${data.title}". How can I help you approach this problem?`,
+              },
+            ]);
+          }
         }
       } catch (err) {
         if (isMounted) {
@@ -64,7 +88,7 @@ export default function Problem() {
       }
     };
 
-    loadProblem();
+    loadProblemAndChat();
     return () => {
       isMounted = false;
       if (debounceTimerRef.current) {
@@ -147,38 +171,60 @@ export default function Problem() {
     } finally { setIsSubmitting(false); }
   };
 
-  const handleAskHint = (level) => {
+  const handleAskHint = async (level) => {
     setIsChatLoading(true);
-    setTimeout(() => {
-      setIsChatLoading(false);
-      const hints = {
-        1: `Hint 1 (Conceptual): Identify the core algorithmic property of ${problem?.topic || 'this challenge'}. Can you break it down into optimal sub-problems?`,
-        2: `Hint 2 (Approach): Watch the constraints closely. Aim for optimal time complexity before writing helper buffers.`,
-        3: `Hint 3 (Edge Cases): Handle empty or single element edge cases to prevent out-of-bounds errors.`,
-      };
+    try {
+      const res = await askHint(id, { code, hintLevel: level });
+      if (res?.messages) {
+        setChatMessages(res.messages);
+      } else if (res?.hint) {
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'user', type: 'hint', content: `Requesting Hint ${level}` },
+          { role: 'assistant', type: 'hint', content: res.hint },
+        ]);
+      }
+    } catch (err) {
       setChatMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content: hints[level] || 'Review problem constraints and edge cases.',
-        },
+        { role: 'assistant', type: 'chat', content: `⚠️ Failed to fetch hint: ${err.message}` },
       ]);
-    }, 800);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
-  const handleSendMessage = (msg) => {
-    setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
+  const handleSendMessage = async (msg) => {
     setIsChatLoading(true);
-    setTimeout(() => {
-      setIsChatLoading(false);
+    setChatMessages((prev) => [...prev, { role: 'user', type: 'chat', content: msg }]);
+    try {
+      const res = await sendChatMessage(id, { message: msg, code, type: 'chat' });
+      if (res?.messages) {
+        setChatMessages(res.messages);
+      } else if (res?.reply) {
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'assistant', type: 'chat', content: res.reply },
+        ]);
+      }
+    } catch (err) {
       setChatMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content: `Regarding: "${msg}" — Remember to trace your algorithm step-by-step with small sample inputs.`,
-        },
+        { role: 'assistant', type: 'chat', content: `⚠️ AI Tutor error: ${err.message}` },
       ]);
-    }, 1000);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  const handleClearChat = async () => {
+    try {
+      await clearConversation(id);
+      setChatMessages([]);
+    } catch (err) {
+      console.warn('Failed to clear chat:', err.message);
+      setChatMessages([]);
+    }
   };
 
   if (loading) {
@@ -233,6 +279,7 @@ export default function Problem() {
       onRegenerate={() => navigate('/workspace')}
       onAskHint={handleAskHint}
       onSendMessage={handleSendMessage}
+      onClearChat={handleClearChat}
       chatMessages={chatMessages}
       isChatLoading={isChatLoading}
     />

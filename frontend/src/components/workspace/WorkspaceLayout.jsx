@@ -22,12 +22,14 @@ export default function WorkspaceLayout({
   submitResult,
   consoleOutput,
   consoleError,
+  saveError,
   isSaving,
   lastSavedAt,
   onSaveToggle,
   onRegenerate,
   onAskHint,
   onSendMessage,
+  onClearChat,
   chatMessages,
   isChatLoading,
 }) {
@@ -56,6 +58,7 @@ export default function WorkspaceLayout({
             onRegenerate={onRegenerate}
             onAskHint={onAskHint}
             onSendMessage={onSendMessage}
+            onClearChat={onClearChat}
             chatMessages={chatMessages}
             isChatLoading={isChatLoading}
           />
@@ -74,6 +77,7 @@ export default function WorkspaceLayout({
             onResetCode={onResetCode}
             isSaving={isSaving}
             lastSavedAt={lastSavedAt}
+            saveError={saveError}
           />
         </div>
 

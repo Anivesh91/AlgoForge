@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Code2 } from 'lucide-react';
 
 export default function TestCasePanel({ visibleTests = [], customTests = [], onUpdateCustomTests }) {
@@ -6,6 +6,20 @@ export default function TestCasePanel({ visibleTests = [], customTests = [], onU
   const [customInputText, setCustomInputText] = useState(
     JSON.stringify({ nums: [3, -1, 2, 5, -4] }, null, 2)
   );
+  const [jsonError, setJsonError] = useState(null);
+
+  useEffect(() => {
+    if (onUpdateCustomTests) {
+      try {
+        const parsed = JSON.parse(customInputText);
+        onUpdateCustomTests([{ id: 'custom-1', input: parsed }]);
+        setJsonError(null);
+      } catch (err) {
+        setJsonError(err.message);
+        onUpdateCustomTests([]);
+      }
+    }
+  }, []); // Run once on mount to sync default state
 
   const allVisible = visibleTests || [];
 
@@ -61,13 +75,20 @@ export default function TestCasePanel({ visibleTests = [], customTests = [], onU
                   try {
                     const parsed = JSON.parse(e.target.value);
                     onUpdateCustomTests([{ id: 'custom-1', input: parsed }]);
+                    setJsonError(null);
                   } catch (err) {
-                    // Invalid JSON while typing
+                    setJsonError(err.message);
+                    onUpdateCustomTests([]);
                   }
                 }
               }}
-              className="w-full p-3 bg-dark-900 border border-dark-600 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-purple-500"
+              className={`w-full p-3 bg-dark-900 border ${
+                jsonError ? 'border-red-500' : 'border-dark-600'
+              } rounded-lg text-white font-mono text-xs focus:outline-none focus:border-purple-500`}
             />
+            {jsonError && (
+              <div className="text-red-400 text-[11px] mt-1">Invalid JSON: {jsonError}</div>
+            )}
           </div>
         ) : (
           allVisible[selectedTab] && (

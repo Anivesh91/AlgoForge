@@ -13,7 +13,7 @@ export default function History() {
       setLoading(true);
       setError(null);
       const data = await getProblems();
-      setProblems(data.items || data);
+      setProblems(data?.items || data || []);
     } catch (err) {
       setError(err.message || 'Failed to load history');
     } finally {

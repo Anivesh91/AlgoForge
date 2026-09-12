@@ -1,13 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getSubmissions } from '../services/submission.api';
-import { Code2, Clock, CheckCircle2, XCircle, AlertTriangle, Loader2, X, Eye } from 'lucide-react';
+import { getSubmissionReview } from '../services/tutor.api';
+import {
+  Code2,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Loader2,
+  X,
+  Eye,
+  Sparkles,
+  BookOpen,
+} from 'lucide-react';
 
 export default function Submissions() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedSub, setSelectedSub] = useState(null);
+  const [modalTab, setModalTab] = useState('code'); // 'code' | 'review'
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewsCache, setReviewsCache] = useState({});
+
   const modalRef = useRef(null);
   const triggerRef = useRef(null);
 
@@ -48,6 +64,39 @@ export default function Submissions() {
 
     loadData();
   }, []);
+
+  const openModal = (sub, defaultTab = 'code') => {
+    setSelectedSub(sub);
+    setModalTab(defaultTab);
+    if (defaultTab === 'review' && !reviewsCache[sub._id]) {
+      fetchReview(sub._id);
+    }
+  };
+
+  const fetchReview = async (submissionId) => {
+    if (reviewsCache[submissionId]) return;
+    setReviewLoading(true);
+    try {
+      const res = await getSubmissionReview(submissionId);
+      if (res?.review) {
+        setReviewsCache((prev) => ({ ...prev, [submissionId]: res.review }));
+      }
+    } catch (err) {
+      setReviewsCache((prev) => ({
+        ...prev,
+        [submissionId]: `⚠️ Failed to generate AI review: ${err.message}`,
+      }));
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleTabSwitch = (tab) => {
+    setModalTab(tab);
+    if (tab === 'review' && selectedSub && !reviewsCache[selectedSub._id]) {
+      fetchReview(selectedSub._id);
+    }
+  };
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -158,12 +207,26 @@ export default function Submissions() {
                       {new Date(sub.createdAt).toLocaleDateString()}
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={(event) => { triggerRef.current = event.currentTarget; setSelectedSub(sub); }}
-                        className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-medium p-1 rounded hover:bg-dark-700 transition"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> View Code
-                      </button>
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          onClick={(event) => {
+                            triggerRef.current = event.currentTarget;
+                            openModal(sub, 'code');
+                          }}
+                          className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-medium px-2 py-1 rounded bg-dark-900/60 hover:bg-dark-700 border border-dark-700 transition"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> View
+                        </button>
+                        <button
+                          onClick={(event) => {
+                            triggerRef.current = event.currentTarget;
+                            openModal(sub, 'review');
+                          }}
+                          className="inline-flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 font-medium px-2 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" /> AI Review
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -173,14 +236,26 @@ export default function Submissions() {
         </div>
       )}
 
-      {/* Code Inspection Modal */}
+      {/* Code & AI Review Inspection Modal */}
       {selectedSub && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setSelectedSub(null)}>
-          <div ref={modalRef} className="bg-dark-800 border border-dark-600 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]" role="dialog" aria-modal="true" aria-labelledby="submission-code-title" tabIndex={-1}>
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          role="presentation"
+          onMouseDown={(e) => e.target === e.currentTarget && setSelectedSub(null)}
+        >
+          <div
+            ref={modalRef}
+            className="bg-dark-800 border border-dark-600 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="submission-code-title"
+            tabIndex={-1}
+          >
+            {/* Modal Header */}
             <div className="p-4 border-b border-dark-600 flex items-center justify-between bg-dark-900">
               <div className="flex items-center gap-3">
                 <span id="submission-code-title" className="text-sm font-bold text-white">
-                  {selectedSub.problemId?.title || 'Submitted Code'}
+                  {selectedSub.problemId?.title || 'Submission Details'}
                 </span>
                 {getStatusBadge(selectedSub.status)}
               </div>
@@ -192,9 +267,63 @@ export default function Submissions() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-4 bg-[#1e1e1e] flex-1 overflow-y-auto font-mono text-xs text-gray-200">
-              <pre className="whitespace-pre-wrap">{selectedSub.code}</pre>
+
+            {/* Sub-tabs: Code vs AI Review */}
+            <div className="flex items-center border-b border-dark-600 bg-dark-900 px-4 text-xs font-medium text-gray-400">
+              <button
+                onClick={() => handleTabSwitch('code')}
+                className={`py-2 px-3 flex items-center gap-1.5 border-b-2 transition ${
+                  modalTab === 'code'
+                    ? 'text-blue-400 border-blue-500 font-semibold'
+                    : 'border-transparent hover:text-gray-200'
+                }`}
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                Submitted Code
+              </button>
+              <button
+                onClick={() => handleTabSwitch('review')}
+                className={`py-2 px-3 flex items-center gap-1.5 border-b-2 transition ${
+                  modalTab === 'review'
+                    ? 'text-amber-400 border-amber-500 font-semibold'
+                    : 'border-transparent hover:text-gray-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                AI Code Review & Complexity
+              </button>
             </div>
+
+            {/* Modal Body */}
+            {modalTab === 'code' ? (
+              <div className="p-4 bg-[#1e1e1e] flex-1 overflow-y-auto font-mono text-xs text-gray-200">
+                <pre className="whitespace-pre-wrap">{selectedSub.code}</pre>
+              </div>
+            ) : (
+              <div className="p-5 bg-dark-850 flex-1 overflow-y-auto text-xs text-gray-200 select-text">
+                {reviewLoading ? (
+                  <div className="py-12 flex flex-col items-center justify-center gap-3 text-amber-400">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span className="text-sm">Generating comprehensive C++ code review...</span>
+                  </div>
+                ) : reviewsCache[selectedSub._id] ? (
+                  <div className="prose prose-invert max-w-none text-xs leading-relaxed whitespace-pre-wrap font-sans">
+                    {reviewsCache[selectedSub._id]}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-400">
+                    <Sparkles className="w-8 h-8 text-amber-400 mx-auto mb-2 opacity-50" />
+                    <p>Click below to request an AI review of your submission.</p>
+                    <button
+                      onClick={() => fetchReview(selectedSub._id)}
+                      className="mt-3 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold transition"
+                    >
+                      Analyze Submission
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

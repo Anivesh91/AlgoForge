@@ -2,7 +2,6 @@ const Submission = require('../models/Submission');
 const Problem = require('../models/Problem');
 const User = require('../models/User');
 const ProblemSolve = require('../models/ProblemSolve');
-const mongoose = require('mongoose');
 const { executeSubmissionSchema } = require('../validators/submission.schema');
 const { judgeSolution } = require('../services/execution/judge.service');
 const { successResponse, errorResponse } = require('../utils/response');

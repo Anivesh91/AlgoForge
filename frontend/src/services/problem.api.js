@@ -29,4 +29,3 @@ export const generateProblem = async (payload) => {
   const response = await api.post('/problems/generate', payload);
   return response.data;
 };
-

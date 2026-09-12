@@ -1,6 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { exec, spawn } = require('child_process');
+const { exec } = require('child_process');
 
 const DEFAULT_TIMEOUT_MS = parseInt(process.env.RUN_TIMEOUT_MS || '2000', 10);
 const DEFAULT_MEMORY_MB = parseInt(process.env.RUN_MEMORY_MB || '256', 10);
@@ -59,7 +59,6 @@ async function executeInSandbox({
 
     // 2. Compilation phase inside container
     // Compile with g++ -O2 -std=c++17
-    const storageLimitMb = parseInt(process.env.RUN_STORAGE_MB || '64', 10);
     const compileCmd = `docker run --rm --name ${containerName}_cmp -v "${dockerMountPath}:/sandbox" --storage-opt size=${storageLimitMb}m --network none --memory 512m --cpus 1.5 ${RUNNER_IMAGE} sh -c "g++ -O2 -std=c++17 /sandbox/solution.cpp -o /sandbox/solution 2>&1"`;
     
     const compileStartTime = Date.now();
@@ -68,7 +67,7 @@ async function executeInSandbox({
       await runCommand(`docker rm -f ${containerName}_cmp`);
     }
     
-    if (compileResult.error || !compileResult.stdout.includes('')) {
+    if (compileResult.error) {
       // Check if binary was produced
       try {
         await fs.access(path.join(jobDir, 'solution'));

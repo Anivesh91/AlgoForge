@@ -2,7 +2,6 @@ import React from 'react';
 import { Terminal, AlertCircle } from 'lucide-react';
 
 export default function ConsolePanel({ output = '', error = '' }) {
-  const content = error || output;
 
   return (
     <div className="flex flex-col h-full bg-dark-900 overflow-hidden font-mono text-xs">
@@ -17,9 +16,10 @@ export default function ConsolePanel({ output = '', error = '' }) {
       </div>
 
       <div className="flex-1 p-4 overflow-y-auto bg-dark-900 text-gray-300 select-text whitespace-pre-wrap leading-relaxed">
-        {content ? (
-          <div className={error ? 'text-rose-400' : 'text-gray-300'}>
-            {content}
+        {output || error ? (
+          <div className="flex flex-col gap-2">
+            {output && <div className="text-gray-300">{output}</div>}
+            {error && <div className="text-rose-400">{error}</div>}
           </div>
         ) : (
           <div className="text-gray-600 italic">

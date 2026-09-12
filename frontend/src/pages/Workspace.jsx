@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import WorkspaceLayout from '../components/workspace/WorkspaceLayout';
 import { MOCK_PROBLEM } from '../components/workspace/mockProblem';
 import { generateProblem, saveDraft, toggleSaveProblem } from '../services/problem.api';
 import { executeProblem } from '../services/execution.api';
+import {
+  getConversation,
+  askHint,
+  sendChatMessage,
+  clearConversation,
+} from '../services/tutor.api';
 
 export default function Workspace() {
   const [problem, setProblem] = useState(MOCK_PROBLEM);
@@ -19,10 +25,42 @@ export default function Workspace() {
   const [chatMessages, setChatMessages] = useState([
     {
       role: 'assistant',
+      type: 'chat',
       content: 'Hello! I am your AlgoForge AI coach. I can give you hints or answer questions about this problem.',
     },
   ]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (window._draftSaveTimer) {
+        clearTimeout(window._draftSaveTimer);
+      }
+    };
+  }, []);
+
+  // Load persisted conversation when problem changes
+  useEffect(() => {
+    if (problem?._id && !problem._id.startsWith('mock-')) {
+      getConversation(problem._id)
+        .then((data) => {
+          if (data?.messages && data.messages.length > 0) {
+            setChatMessages(data.messages);
+          } else {
+            setChatMessages([
+              {
+                role: 'assistant',
+                type: 'chat',
+                content: `Problem "${problem.title}" ready! I am your AlgoForge AI Coach. Ask for progressive hints or code guidance whenever you need help.`,
+              },
+            ]);
+          }
+        })
+        .catch((err) => {
+          console.warn('Failed to load conversation history:', err.message);
+        });
+    }
+  }, [problem?._id]);
 
   const handleCodeChange = (newCode) => {
     setCode(newCode);
@@ -54,9 +92,9 @@ export default function Workspace() {
     }
   };
 
-  const handleGenerate = async ({ prompt, difficulty, attachment }) => {
+  const handleGenerate = async ({ prompt, difficulty }) => {
+    setIsGenerating(true);
     try {
-      setIsGenerating(true);
       setConsoleOutput(
         'Contacting AI problem generation engine...\nFormulating problem specifications, test cases, and reference solution...\nExecuting Phase 4 reference solution self-validation loop in Docker sandbox...\n'
       );
@@ -68,8 +106,8 @@ export default function Workspace() {
         topic: 'Algorithms & Data Structures',
       });
 
-      if (response && response.data) {
-        const newProblem = response.data;
+      if (response) {
+        const newProblem = response;
         setProblem(newProblem);
         setCode(newProblem.starterCode);
         setRunResult(null);
@@ -82,8 +120,7 @@ export default function Workspace() {
       }
     } catch (err) {
       console.error('Failed to generate problem:', err);
-      const errMsg =
-        err.response?.data?.error?.message || err.message || 'Failed to generate problem.';
+      const errMsg = err.message || 'Failed to generate problem.';
       setConsoleError(`Generation Error: ${errMsg}`);
       setConsoleOutput((prev) => prev + `\n[FAILED]: ${errMsg}`);
     } finally {
@@ -138,40 +175,91 @@ export default function Workspace() {
     setRunResult(null);
     setSubmitResult(null);
     setConsoleOutput('');
+    setConsoleError('');
   };
 
-  const handleAskHint = (level) => {
+  const handleAskHint = async (level) => {
     setIsChatLoading(true);
-    setTimeout(() => {
-      setIsChatLoading(false);
-      const hints = {
-        1: 'Hint 1 (Concept): Consider whether you need all previous subarrays, or if Kadane\'s running sum algorithm allows an O(N) single pass.',
-        2: 'Hint 2 (Approach): At each index i, decide whether to extend the current subarray sum (`current_sum + nums[i]`) or start fresh from `nums[i]`.',
-        3: 'Hint 3 (Edge Case): Remember to handle cases where all numbers in `nums` are negative! In that case, the maximum subarray is simply the maximum single element.',
-      };
+    try {
+      if (problem?._id && !problem._id.startsWith('mock-')) {
+        const res = await askHint(problem._id, { code, hintLevel: level });
+        if (res?.messages) {
+          setChatMessages(res.messages);
+        } else if (res?.hint) {
+          setChatMessages((prev) => [
+            ...prev,
+            { role: 'user', type: 'hint', content: `Requesting Hint ${level}` },
+            { role: 'assistant', type: 'hint', content: res.hint },
+          ]);
+        }
+      } else {
+        const hints = {
+          1: 'Hint 1 (Concept): Consider whether you need all previous subarrays, or if Kadane\'s running sum algorithm allows an O(N) single pass.',
+          2: 'Hint 2 (Approach): At each index i, decide whether to extend the current subarray sum (`current_sum + nums[i]`) or start fresh from `nums[i]`.',
+          3: 'Hint 3 (Edge Case): Remember to handle cases where all numbers in `nums` are negative! In that case, the maximum subarray is simply the maximum single element.',
+        };
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'user', type: 'hint', content: `Requesting Hint ${level}` },
+          { role: 'assistant', type: 'hint', content: hints[level] || 'Keep your complexity O(N).' },
+        ]);
+      }
+    } catch (err) {
       setChatMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content: hints[level] || 'Keep your complexity O(N).',
-        },
+        { role: 'assistant', type: 'chat', content: `⚠️ Failed to fetch hint: ${err.message}` },
       ]);
-    }, 800);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
-  const handleSendMessage = (msg) => {
-    setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
+  const handleSendMessage = async (msg) => {
     setIsChatLoading(true);
-    setTimeout(() => {
-      setIsChatLoading(false);
+    setChatMessages((prev) => [...prev, { role: 'user', type: 'chat', content: msg }]);
+    try {
+      if (problem?._id && !problem._id.startsWith('mock-')) {
+        const res = await sendChatMessage(problem._id, { message: msg, code, type: 'chat' });
+        if (res?.messages) {
+          setChatMessages(res.messages);
+        } else if (res?.reply) {
+          setChatMessages((prev) => [
+            ...prev,
+            { role: 'assistant', type: 'chat', content: res.reply },
+          ]);
+        }
+      } else {
+        setTimeout(() => {
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              type: 'chat',
+              content: `Regarding: "${msg}" — Look closely at how the current sum resets whenever it drops below zero. That ensures an optimal contiguous segment is tracked.`,
+            },
+          ]);
+        }, 600);
+      }
+    } catch (err) {
       setChatMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content: `Regarding your question: "${msg}" — Look closely at how the current sum resets whenever it drops below zero. That ensures an optimal contiguous segment is tracked.`,
-        },
+        { role: 'assistant', type: 'chat', content: `⚠️ AI Tutor error: ${err.message}` },
       ]);
-    }, 1000);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  const handleClearChat = async () => {
+    try {
+      if (problem?._id && !problem._id.startsWith('mock-')) {
+        await clearConversation(problem._id);
+      }
+      setChatMessages([]);
+    } catch (err) {
+      console.warn('Failed to clear chat:', err.message);
+      setChatMessages([]);
+    }
   };
 
   return (
@@ -196,6 +284,7 @@ export default function Workspace() {
       onRegenerate={handleRegenerate}
       onAskHint={handleAskHint}
       onSendMessage={handleSendMessage}
+      onClearChat={handleClearChat}
       chatMessages={chatMessages}
       isChatLoading={isChatLoading}
     />

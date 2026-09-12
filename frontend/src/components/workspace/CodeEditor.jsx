@@ -8,6 +8,7 @@ export default function CodeEditor({
   onResetCode,
   isSaving,
   lastSavedAt,
+  saveError,
 }) {
   const editorRef = useRef(null);
 
@@ -37,7 +38,9 @@ export default function CodeEditor({
         <div className="flex items-center gap-3">
           {/* Autosave draft indicator */}
           <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-            {isSaving ? (
+            {saveError ? (
+              <span className="text-rose-400" title={saveError}>Sync Error</span>
+            ) : isSaving ? (
               <>
                 <Cloud className="w-3.5 h-3.5 animate-pulse text-amber-400" />
                 <span>Saving draft...</span>

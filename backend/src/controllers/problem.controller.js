@@ -2,7 +2,6 @@ const Problem = require('../models/Problem');
 const Conversation = require('../models/Conversation');
 const Submission = require('../models/Submission');
 const ProblemSolve = require('../models/ProblemSolve');
-const mongoose = require('mongoose');
 const { updateDraftSchema, generateProblemInputSchema } = require('../validators/problem.schema');
 const { generateAndValidateProblem } = require('../services/ai/problemGenerator.service');
 const { successResponse, errorResponse } = require('../utils/response');
