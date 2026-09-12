@@ -7,6 +7,7 @@ export default function AIInput({ onGenerate, isGenerating }) {
   const [difficulty, setDifficulty] = useState('Medium');
   const [showUpload, setShowUpload] = useState(false);
   const [attachment, setAttachment] = useState(null);
+  const [referenceMode, setReferenceMode] = useState('convert');
 
   const quickPrompts = [
     'Subarray sum with continuous elements',
@@ -18,7 +19,7 @@ export default function AIInput({ onGenerate, isGenerating }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!prompt.trim() || isGenerating) return;
-    onGenerate({ prompt: prompt.trim(), difficulty, attachment });
+    onGenerate({ prompt: prompt.trim(), difficulty, attachment, referenceMode });
   };
 
   return (
@@ -95,6 +96,8 @@ export default function AIInput({ onGenerate, isGenerating }) {
             <ReferenceUpload
               attachment={attachment}
               onSelect={setAttachment}
+              referenceMode={referenceMode}
+              onModeChange={setReferenceMode}
               onClose={() => setShowUpload(false)}
             />
           )}

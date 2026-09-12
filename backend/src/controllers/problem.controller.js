@@ -153,11 +153,23 @@ const generateProblem = async (req, res, next) => {
   try {
     const validatedData = generateProblemInputSchema.parse(req.body);
 
+    let attachment = null;
+    if (req.file) {
+      attachment = {
+        path: req.file.path,
+        mimeType: req.file.mimetype,
+        originalName: req.file.originalname,
+        size: req.file.size,
+      };
+    }
+
     const problem = await generateAndValidateProblem({
       userId: req.user._id,
       prompt: validatedData.prompt,
       difficulty: validatedData.difficulty,
       topic: validatedData.topic,
+      attachment,
+      referenceMode: validatedData.referenceMode || 'convert',
     });
 
     return successResponse(res, problem.toPublicJSON(), 201);

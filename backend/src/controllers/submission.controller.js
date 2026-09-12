@@ -84,7 +84,7 @@ const executeSubmission = async (req, res, next) => {
         }
       }
 
-      await Submission.create(submissionData);
+      const createdSubmission = await Submission.create(submissionData);
 
       const statsUpdate = {
         $inc: { 'stats.totalSubmissions': 1 },
@@ -109,6 +109,7 @@ const executeSubmission = async (req, res, next) => {
 
       return successResponse(res, {
         ...result,
+        submissionId: createdSubmission._id,
         testResults: sanitizedTestResults,
       });
     }

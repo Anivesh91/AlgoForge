@@ -96,18 +96,24 @@ export default function Workspace() {
     }
   };
 
-  const handleGenerate = async ({ prompt, difficulty }) => {
+  const handleGenerate = async ({ prompt, difficulty, attachment, referenceMode }) => {
     setIsGenerating(true);
     try {
-      setConsoleOutput(
-        'Contacting AI problem generation engine...\nFormulating problem specifications, test cases, and reference solution...\nExecuting Phase 4 reference solution self-validation loop in Docker sandbox...\n'
-      );
+      let initialMsg = 'Contacting AI problem generation engine...\nFormulating problem specifications, test cases, and reference solution...\n';
+      if (attachment) {
+        initialMsg = `Uploading and analyzing reference "${attachment.name}" (Mode: ${referenceMode || 'convert'})...\n` + initialMsg;
+      }
+      initialMsg += 'Executing Phase 4 reference solution self-validation loop in Docker sandbox...\n';
+      
+      setConsoleOutput(initialMsg);
       setConsoleError('');
 
       const response = await generateProblem({
         prompt,
         difficulty,
         topic: 'Algorithms & Data Structures',
+        attachment,
+        referenceMode,
       });
 
       if (response) {

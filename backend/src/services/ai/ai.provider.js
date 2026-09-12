@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const fs = require('fs');
 
 const SYSTEM_PROMPT = `
 You are the AlgoForge Problem Generation Engine.
@@ -380,7 +381,14 @@ public:
 /**
  * Invokes Gemini AI or fallback generator to generate a raw problem payload
  */
-async function generateRawProblem({ prompt, difficulty = 'Medium', topic = 'General DSA', feedback = '' }) {
+async function generateRawProblem({
+  prompt,
+  difficulty = 'Medium',
+  topic = 'General DSA',
+  feedback = '',
+  attachment = null,
+  referenceMode = 'convert',
+}) {
   const apiKey = process.env.AI_API_KEY;
   const isMock = !apiKey || apiKey === 'mock_key_for_now' || apiKey.trim() === '';
 
@@ -391,12 +399,26 @@ async function generateRawProblem({ prompt, difficulty = 'Medium', topic = 'Gene
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const modelName = process.env.AI_MODEL || 'gemini-1.5-flash';
+    const modelName = process.env.AI_MODEL || 'gemini-3.6-flash';
     const model = genAI.getGenerativeModel({ model: modelName });
+
+    const modeInstructions = {
+      convert: 'Objective: Convert the attached reference into a clean, standardized LeetCode-style C++17 challenge. Preserve the exact algorithmic premise, constraints, and core logic.',
+      variant: 'Objective: Analyze the reference to identify its core algorithmic pattern/concept. Generate a BRAND NEW original problem testing the same concept in a different storyline.',
+      harder: 'Objective: Generate a significantly harder variation of the reference problem by elevating constraints or introducing additional dimensions.',
+      easier: 'Objective: Generate an approachable, simplified variation of the reference problem.',
+      inspiration: 'Objective: Use the reference loosely for thematic inspiration, but create an original challenge.',
+    };
 
     let userInstruction = `Generate a DSA coding challenge with difficulty "${difficulty}".
 Topic / Instructions: "${prompt}".
 Target topic category: "${topic}".`;
+
+    if (attachment) {
+      userInstruction += `\n\nREFERENCE ATTACHMENT PROVIDED: "${attachment.originalName || 'file'}" (${attachment.mimeType}).
+REFERENCE MODE: ${referenceMode.toUpperCase()}
+${modeInstructions[referenceMode] || modeInstructions.convert}`;
+    }
 
     if (feedback) {
       userInstruction += `\n\nPREVIOUS GENERATION ATTEMPT FAILED WITH ERROR:
@@ -404,8 +426,27 @@ ${feedback}
 Please fix the code and test cases so the reference solution compiles and passes 100% of all tests.`;
     }
 
+    const parts = [{ text: `${SYSTEM_PROMPT}\n\n${userInstruction}` }];
+
+    // Handle multimodal attachments (Images, PDFs, TXT)
+    if (attachment && attachment.path && fs.existsSync(attachment.path)) {
+      if (attachment.mimeType.startsWith('image/') || attachment.mimeType === 'application/pdf') {
+        const fileBuffer = fs.readFileSync(attachment.path);
+        parts.push({
+          inlineData: {
+            mimeType: attachment.mimeType,
+            data: fileBuffer.toString('base64'),
+          },
+        });
+      } else if (attachment.mimeType === 'text/plain') {
+        const textContent = fs.readFileSync(attachment.path, 'utf8');
+        userInstruction += `\n\nATTACHED REFERENCE TEXT:\n${textContent}\n`;
+        parts[0].text = `${SYSTEM_PROMPT}\n\n${userInstruction}`;
+      }
+    }
+
     const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT}\n\n${userInstruction}` }] }],
+      contents: [{ role: 'user', parts }],
       generationConfig: {
         temperature: 0.2, // Low temperature for high precision code & test consistency
         responseMimeType: 'application/json',

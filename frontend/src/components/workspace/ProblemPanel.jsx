@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bookmark, Sparkles, MessageSquare, BookOpen, RotateCcw, Check } from 'lucide-react';
+import { Bookmark, Sparkles, MessageSquare, BookOpen, RotateCcw, Check, Paperclip } from 'lucide-react';
 import AIChat from './AIChat';
 
 export default function ProblemPanel({
@@ -100,7 +100,7 @@ export default function ProblemPanel({
         {activeTab === 'description' ? (
           <div className="space-y-6 text-sm text-gray-300 leading-relaxed">
             {/* Topic & Tags */}
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs bg-dark-800 text-gray-400 border border-dark-600 px-2 py-0.5 rounded-md font-medium">
                 {problem.topic || 'Data Structures'}
               </span>
@@ -112,6 +112,15 @@ export default function ProblemPanel({
                   #{tag}
                 </span>
               ))}
+              {problem.reference && problem.reference.originalName && (
+                <span
+                  title={`Generated from attached reference: ${problem.reference.originalName} (${problem.reference.type || 'file'})`}
+                  className="text-xs bg-blue-500/15 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-md flex items-center gap-1 font-medium"
+                >
+                  <Paperclip className="w-3 h-3" />
+                  {problem.reference.originalName}
+                </span>
+              )}
             </div>
 
             {/* Problem Statement */}

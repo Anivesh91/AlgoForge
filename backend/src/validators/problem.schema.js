@@ -8,6 +8,10 @@ const generateProblemInputSchema = z.object({
     .max(2000, 'Prompt is too long'),
   difficulty: z.enum(['Easy', 'Medium', 'Hard']).optional().default('Medium'),
   topic: z.string().max(100).optional().default('General DSA'),
+  referenceMode: z
+    .enum(['convert', 'variant', 'harder', 'easier', 'inspiration'])
+    .optional()
+    .default('convert'),
 });
 
 const updateDraftSchema = z.object({
