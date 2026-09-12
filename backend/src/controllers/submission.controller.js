@@ -1,6 +1,8 @@
 const Submission = require('../models/Submission');
 const Problem = require('../models/Problem');
 const User = require('../models/User');
+const ProblemSolve = require('../models/ProblemSolve');
+const mongoose = require('mongoose');
 const { executeSubmissionSchema } = require('../validators/submission.schema');
 const { judgeSolution } = require('../services/execution/judge.service');
 const { successResponse, errorResponse } = require('../utils/response');
@@ -55,14 +57,7 @@ const executeSubmission = async (req, res, next) => {
     });
 
     if (submit) {
-      // Check if user has already solved this problem prior to this submission
-      const alreadySolved = await Submission.exists({
-        userId: req.user._id,
-        problemId: problem._id,
-        status: 'ACCEPTED',
-      });
-
-      await Submission.create({
+      const submissionData = {
         userId: req.user._id,
         problemId: problem._id,
         code,
@@ -72,13 +67,30 @@ const executeSubmission = async (req, res, next) => {
         runtimeMs: result.runtimeMs,
         memoryKb: result.memoryKb,
         compileOutput: result.compileOutput,
-      });
+      };
 
-      // Increment stats: totalSubmissions always, and solvedProblems only on first AC
+      let isFirstSolve = false;
+      if (result.status === 'ACCEPTED') {
+        try {
+          await ProblemSolve.create({
+            userId: req.user._id,
+            problemId: problem._id,
+          });
+          isFirstSolve = true;
+        } catch (err) {
+          // E11000 duplicate key error means this problem was already solved by this user
+          if (err.code !== 11000) {
+            console.warn('[ProblemSolve] Error recording solve:', err.message);
+          }
+        }
+      }
+
+      await Submission.create(submissionData);
+
       const statsUpdate = {
         $inc: { 'stats.totalSubmissions': 1 },
       };
-      if (result.status === 'ACCEPTED' && !alreadySolved) {
+      if (isFirstSolve) {
         statsUpdate.$inc['stats.solvedProblems'] = 1;
       }
       await User.findByIdAndUpdate(req.user._id, statsUpdate);

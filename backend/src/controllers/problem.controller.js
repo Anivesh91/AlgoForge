@@ -1,6 +1,7 @@
 const Problem = require('../models/Problem');
 const Conversation = require('../models/Conversation');
 const Submission = require('../models/Submission');
+const ProblemSolve = require('../models/ProblemSolve');
 const mongoose = require('mongoose');
 const { updateDraftSchema, generateProblemInputSchema } = require('../validators/problem.schema');
 const { generateAndValidateProblem } = require('../services/ai/problemGenerator.service');
@@ -135,16 +136,12 @@ const deleteProblem = async (req, res, next) => {
       return errorResponse(res, 'FORBIDDEN', 'You do not have permission to delete this problem', 403);
     }
 
-    const session = await mongoose.startSession();
-    try {
-      await session.withTransaction(async () => {
-        await Conversation.deleteMany({ problemId: problem._id }, { session });
-        await Submission.deleteMany({ problemId: problem._id }, { session });
-        await Problem.deleteOne({ _id: problem._id, ownerId: req.user._id }, { session });
-      });
-    } finally {
-      await session.endSession();
-    }
+    await Promise.all([
+      Conversation.deleteMany({ problemId: problem._id }),
+      Submission.deleteMany({ problemId: problem._id }),
+      ProblemSolve.deleteMany({ problemId: problem._id }),
+      Problem.deleteOne({ _id: problem._id, ownerId: req.user._id }),
+    ]);
 
     return successResponse(res, { message: 'Problem deleted successfully' });
   } catch (error) {
