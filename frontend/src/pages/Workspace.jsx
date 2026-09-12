@@ -41,9 +41,12 @@ export default function Workspace() {
 
   // Load persisted conversation when problem changes
   useEffect(() => {
+    let isActive = true;
+    const capturedProblemId = problem?._id;
     if (problem?._id && !problem._id.startsWith('mock-')) {
       getConversation(problem._id)
         .then((data) => {
+          if (!isActive || capturedProblemId !== problem?._id) return;
           if (data?.messages && data.messages.length > 0) {
             setChatMessages(data.messages);
           } else {
@@ -60,6 +63,7 @@ export default function Workspace() {
           console.warn('Failed to load conversation history:', err.message);
         });
     }
+    return () => { isActive = false; };
   }, [problem?._id]);
 
   const handleCodeChange = (newCode) => {
@@ -258,7 +262,6 @@ export default function Workspace() {
       setChatMessages([]);
     } catch (err) {
       console.warn('Failed to clear chat:', err.message);
-      setChatMessages([]);
     }
   };
 

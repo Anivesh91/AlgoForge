@@ -237,11 +237,17 @@ async function generateSubmissionReview({ problem, submission, focus = 'comprehe
     const modelName = process.env.AI_MODEL || 'gemini-3.6-flash';
     const model = genAI.getGenerativeModel({ model: modelName });
 
+    const focusInstructions = {
+      complexity: 'Focus primarily on time and space complexity, bottlenecks, and whether the approach meets the constraints.',
+      clean_code: 'Focus primarily on readability, naming, structure, idiomatic C++17, maintainability, and unnecessary complexity.',
+      comprehensive: 'Cover correctness, complexity, clean code, edge cases, and practical optimizations comprehensively.',
+    }[focus] || 'Cover correctness, complexity, clean code, edge cases, and practical optimizations comprehensively.';
     const systemPrompt = `You are a Senior C++ Software Engineer conducting a thorough code review on AlgoForge.
 The student submitted a solution for:
 Problem: "${problem.title}" (${problem.difficulty})
 Status: ${submission.status} (${submission.passedTests}/${submission.totalTests} tests passed)
 Runtime: ${submission.runtimeMs || 0} ms
+Review focus: ${focusInstructions}
 
 Submitted C++ Code:
 \`\`\`cpp

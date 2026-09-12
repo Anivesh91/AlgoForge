@@ -9,6 +9,23 @@ const {
 } = require('../services/ai/tutor.service');
 const { successResponse, errorResponse } = require('../utils/response');
 
+const appendMessages = async (filter, messages) => {
+  try {
+    return await Conversation.findOneAndUpdate(
+      filter,
+      { $push: { messages: { $each: messages } } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+  } catch (error) {
+    if (error.code !== 11000) throw error;
+    return Conversation.findOneAndUpdate(
+      filter,
+      { $push: { messages: { $each: messages } } },
+      { new: true }
+    );
+  }
+};
+
 /**
  * Retrieves conversation history for the authenticated user and problem
  */
@@ -48,36 +65,17 @@ const postHint = async (req, res, next) => {
       hintLevel: validated.hintLevel,
     });
 
-    // Find or create conversation document
-    let conversation = await Conversation.findOne({
-      problemId,
-      userId: req.user._id,
-    });
-
-    if (!conversation) {
-      conversation = new Conversation({
-        problemId,
-        userId: req.user._id,
-        messages: [],
-      });
-    }
-
-    // Record user request and tutor hint
-    conversation.messages.push({
+    const conversation = await appendMessages({ problemId, userId: req.user._id }, [{
       role: 'user',
       type: 'hint',
       content: `Requesting Hint ${validated.hintLevel}`,
       createdAt: new Date(),
-    });
-
-    conversation.messages.push({
+    }, {
       role: 'assistant',
       type: 'hint',
       content: hint,
       createdAt: new Date(),
-    });
-
-    await conversation.save();
+    }]);
 
     return successResponse(res, {
       hint,
@@ -102,45 +100,35 @@ const postChat = async (req, res, next) => {
       return errorResponse(res, 'NOT_FOUND', 'Problem not found', 404);
     }
 
-    let conversation = await Conversation.findOne({
+    const conversation = await Conversation.findOne({
       problemId,
       userId: req.user._id,
     });
 
-    if (!conversation) {
-      conversation = new Conversation({
-        problemId,
-        userId: req.user._id,
-        messages: [],
-      });
-    }
+    const conversationHistory = conversation ? conversation.messages : [];
 
     const reply = await generateContextualReply({
       problem,
       userCode: validated.code,
       userMessage: validated.message,
-      conversationHistory: conversation.messages,
+      conversationHistory,
     });
 
-    conversation.messages.push({
+    const updatedConversation = await appendMessages({ problemId, userId: req.user._id }, [{
       role: 'user',
       type: validated.type,
       content: validated.message,
       createdAt: new Date(),
-    });
-
-    conversation.messages.push({
+    }, {
       role: 'assistant',
       type: validated.type,
       content: reply,
       createdAt: new Date(),
-    });
-
-    await conversation.save();
+    }]);
 
     return successResponse(res, {
       reply,
-      messages: conversation.messages,
+      messages: updatedConversation.messages,
     });
   } catch (error) {
     next(error);
@@ -154,15 +142,11 @@ const clearConversation = async (req, res, next) => {
   try {
     const { id: problemId } = req.params;
 
-    const conversation = await Conversation.findOne({
-      problemId,
-      userId: req.user._id,
-    });
-
-    if (conversation) {
-      conversation.messages = [];
-      await conversation.save();
-    }
+    await Conversation.findOneAndUpdate(
+      { problemId, userId: req.user._id },
+      { $set: { messages: [] } },
+      { new: true }
+    );
 
     return successResponse(res, {
       messages: [],

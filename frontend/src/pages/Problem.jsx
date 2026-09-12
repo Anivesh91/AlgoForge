@@ -41,6 +41,7 @@ export default function Problem() {
   // Load problem details and stored conversation from backend
   useEffect(() => {
     let isMounted = true;
+    const requestedProblemId = id;
     const loadProblemAndChat = async () => {
       try {
         setLoading(true);
@@ -56,6 +57,7 @@ export default function Problem() {
           // Fetch stored conversation history
           try {
             const chatData = await getConversation(id);
+            if (!isMounted || requestedProblemId !== id) return;
             if (chatData?.messages && chatData.messages.length > 0) {
               setChatMessages(chatData.messages);
             } else {
@@ -68,6 +70,7 @@ export default function Problem() {
               ]);
             }
           } catch (chatErr) {
+            if (!isMounted || requestedProblemId !== id) return;
             setChatMessages([
               {
                 role: 'assistant',
@@ -223,7 +226,6 @@ export default function Problem() {
       setChatMessages([]);
     } catch (err) {
       console.warn('Failed to clear chat:', err.message);
-      setChatMessages([]);
     }
   };
 

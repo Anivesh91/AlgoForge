@@ -23,6 +23,8 @@ export default function Submissions() {
   const [modalTab, setModalTab] = useState('code'); // 'code' | 'review'
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewsCache, setReviewsCache] = useState({});
+  const [reviewStates, setReviewStates] = useState({});
+  const reviewRequestsRef = useRef(new Set());
 
   const modalRef = useRef(null);
   const triggerRef = useRef(null);
@@ -74,19 +76,21 @@ export default function Submissions() {
   };
 
   const fetchReview = async (submissionId) => {
-    if (reviewsCache[submissionId]) return;
+    if (reviewsCache[submissionId] || reviewRequestsRef.current.has(submissionId)) return;
+    reviewRequestsRef.current.add(submissionId);
+    setReviewStates((prev) => ({ ...prev, [submissionId]: 'pending' }));
     setReviewLoading(true);
     try {
       const res = await getSubmissionReview(submissionId);
       if (res?.review) {
         setReviewsCache((prev) => ({ ...prev, [submissionId]: res.review }));
+        setReviewStates((prev) => ({ ...prev, [submissionId]: 'success' }));
       }
     } catch (err) {
-      setReviewsCache((prev) => ({
-        ...prev,
-        [submissionId]: `⚠️ Failed to generate AI review: ${err.message}`,
-      }));
+      setReviewStates((prev) => ({ ...prev, [submissionId]: 'failed' }));
+      console.warn('Failed to generate AI review:', err.message);
     } finally {
+      reviewRequestsRef.current.delete(submissionId);
       setReviewLoading(false);
     }
   };

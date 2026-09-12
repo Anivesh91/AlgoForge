@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
   Send,
   Sparkles,
@@ -69,9 +70,9 @@ export default function AIChat({
 
       // Handle simple inline formatting
       return (
-        <span key={index} className="select-text leading-relaxed">
-          {part}
-        </span>
+        <div key={index} className="select-text leading-relaxed">
+          <ReactMarkdown skipHtml>{part}</ReactMarkdown>
+        </div>
       );
     });
   };
