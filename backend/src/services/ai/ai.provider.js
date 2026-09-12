@@ -59,6 +59,186 @@ CRITICAL RULES:
 // Deterministic fallback generator for offline / unkeyed testing
 function getFallbackProblem(prompt, difficulty = 'Medium', topic = 'General DSA') {
   const promptLower = (prompt || '').toLowerCase();
+
+  // 1. LRU Cache Predefined Challenge
+  if (promptLower.includes('lru') || promptLower.includes('cache')) {
+    return {
+      title: 'LRU Cache Design and Operations',
+      difficulty: difficulty,
+      topic: 'Design & Linked List',
+      tags: ['Design', 'Hash Table', 'Linked List'],
+      description: 'Implement a simulation of a Least Recently Used (LRU) cache with a given `capacity`.\n\nYou are given an array of string operations `operations` containing `"put"` and `"get"`, and a 2D integer array `arguments` where:\n- For `"put"`: `arguments[i] = [key, value]`\n- For `"get"`: `arguments[i] = [key]`\n\nReturn an array of integers representing the results of all `"get"` operations in the order they occurred. If a key is not found in `"get"`, return `-1`.',
+      constraints: [
+        '1 <= capacity <= 1000',
+        '1 <= operations.length <= 10^4',
+        'arguments[i].length == 1 or 2',
+        '0 <= key, value <= 10^5',
+      ],
+      examples: [
+        {
+          inputDisplay: 'capacity = 2, operations = ["put", "put", "get", "put", "get", "get"], arguments = [[1, 1], [2, 2], [1], [3, 3], [2], [3]]',
+          outputDisplay: '[1, -1, 3]',
+          explanation: 'get(1) returns 1. put(3, 3) evicts key 2 (least recently used). get(2) returns -1. get(3) returns 3.',
+        },
+      ],
+      functionSpec: {
+        name: 'simulateLRU',
+        returnType: 'vector<int>',
+        parameters: [
+          { name: 'capacity', type: 'int' },
+          { name: 'operations', type: 'vector<string>' },
+          { name: 'arguments', type: 'vector<vector<int>>' },
+        ],
+      },
+      starterCode: 'class Solution {\npublic:\n    vector<int> simulateLRU(int capacity, vector<string>& operations, vector<vector<int>>& arguments) {\n        \n    }\n};',
+      supportCode: '',
+      visibleTests: [
+        {
+          id: 'case-1',
+          input: {
+            capacity: 2,
+            operations: ['put', 'put', 'get', 'put', 'get', 'get'],
+            arguments: [[1, 1], [2, 2], [1], [3, 3], [2], [3]],
+          },
+          expectedOutput: [1, -1, 3],
+        },
+        {
+          id: 'case-2',
+          input: {
+            capacity: 1,
+            operations: ['put', 'get', 'put', 'get'],
+            arguments: [[2, 10], [2], [3, 20], [2]],
+          },
+          expectedOutput: [10, -1],
+        },
+        {
+          id: 'case-3',
+          input: {
+            capacity: 2,
+            operations: ['get', 'put', 'get'],
+            arguments: [[5], [5, 50], [5]],
+          },
+          expectedOutput: [-1, 50],
+        },
+      ],
+      hiddenTests: [
+        {
+          id: 'hidden-1',
+          input: {
+            capacity: 3,
+            operations: ['put', 'put', 'put', 'get', 'get', 'get'],
+            arguments: [[1, 10], [2, 20], [3, 30], [1], [2], [3]],
+          },
+          expectedOutput: [10, 20, 30],
+        },
+        {
+          id: 'hidden-2',
+          input: {
+            capacity: 2,
+            operations: ['put', 'put', 'put', 'get'],
+            arguments: [[1, 1], [2, 2], [1, 10], [1]],
+          },
+          expectedOutput: [10],
+        },
+      ],
+      referenceSolution: `class Solution {
+public:
+    vector<int> simulateLRU(int capacity, vector<string>& operations, vector<vector<int>>& arguments) {
+        vector<int> results;
+        list<pair<int, int>> dll;
+        unordered_map<int, list<pair<int, int>>::iterator> cache;
+
+        for (size_t i = 0; i < operations.size(); ++i) {
+            const string& op = operations[i];
+            if (op == "get") {
+                int key = arguments[i][0];
+                if (cache.find(key) == cache.end()) {
+                    results.push_back(-1);
+                } else {
+                    int val = cache[key]->second;
+                    dll.erase(cache[key]);
+                    dll.push_front({key, val});
+                    cache[key] = dll.begin();
+                    results.push_back(val);
+                }
+            } else if (op == "put") {
+                int key = arguments[i][0];
+                int val = arguments[i][1];
+                if (cache.find(key) != cache.end()) {
+                    dll.erase(cache[key]);
+                } else if ((int)dll.size() >= capacity) {
+                    int lruKey = dll.back().first;
+                    dll.pop_back();
+                    cache.erase(lruKey);
+                }
+                dll.push_front({key, val});
+                cache[key] = dll.begin();
+            }
+        }
+        return results;
+    }
+};`,
+    };
+  }
+
+  // 2. Container With Most Water Predefined Challenge
+  if (promptLower.includes('water') || promptLower.includes('container') || promptLower.includes('area')) {
+    return {
+      title: 'Container With Most Water',
+      difficulty: difficulty,
+      topic: 'Array & Two Pointers',
+      tags: ['Array', 'Two Pointers', 'Greedy'],
+      description: 'You are given an integer array `height` of length `n`. There are `n` vertical lines drawn such that the two endpoints of the `i-th` line are `(i, 0)` and `(i, height[i])`.\n\nFind two lines that together with the x-axis form a container, such that the container contains the most water.\n\nReturn the maximum amount of water a container can store.\n\nNotice that you may not slant the container.',
+      constraints: ['n == height.length', '2 <= n <= 10^5', '0 <= height[i] <= 10^4'],
+      examples: [
+        {
+          inputDisplay: 'height = [1, 8, 6, 2, 5, 4, 8, 3, 7]',
+          outputDisplay: '49',
+          explanation: 'The vertical lines at indices 1 and 8 form a container of width 7 and height min(8, 7) = 7, giving 7 * 7 = 49.',
+        },
+        {
+          inputDisplay: 'height = [1, 1]',
+          outputDisplay: '1',
+          explanation: 'The width is 1 and the height is 1, so the max area is 1.',
+        },
+      ],
+      functionSpec: {
+        name: 'maxArea',
+        returnType: 'int',
+        parameters: [
+          { name: 'height', type: 'vector<int>' },
+        ],
+      },
+      starterCode: 'class Solution {\npublic:\n    int maxArea(vector<int>& height) {\n        \n    }\n};',
+      supportCode: '',
+      visibleTests: [
+        { id: 'case-1', input: { height: [1, 8, 6, 2, 5, 4, 8, 3, 7] }, expectedOutput: 49 },
+        { id: 'case-2', input: { height: [1, 1] }, expectedOutput: 1 },
+        { id: 'case-3', input: { height: [4, 3, 2, 1, 4] }, expectedOutput: 16 },
+      ],
+      hiddenTests: [
+        { id: 'hidden-1', input: { height: [1, 2, 1] }, expectedOutput: 2 },
+        { id: 'hidden-2', input: { height: [2, 3, 4, 5, 18, 17, 6] }, expectedOutput: 17 },
+      ],
+      referenceSolution: `class Solution {
+public:
+    int maxArea(vector<int>& height) {
+        int left = 0, right = (int)height.size() - 1;
+        int maxWater = 0;
+        while (left < right) {
+            int h = min(height[left], height[right]);
+            maxWater = max(maxWater, h * (right - left));
+            if (height[left] < height[right]) {
+                left++;
+            } else {
+                right--;
+            }
+        }
+        return maxWater;
+    }
+};`,
+    };
+  }
   
   if (promptLower.includes('palindrome') || promptLower.includes('string')) {
     return {

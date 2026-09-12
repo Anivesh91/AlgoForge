@@ -68,6 +68,7 @@ const HARNESS_UTILITIES = `
 #include <queue>
 #include <stack>
 #include <deque>
+#include <list>
 #include <numeric>
 #include <climits>
 

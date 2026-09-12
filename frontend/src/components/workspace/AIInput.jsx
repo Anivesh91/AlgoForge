@@ -10,7 +10,7 @@ export default function AIInput({ onGenerate, isGenerating }) {
 
   const quickPrompts = [
     'Subarray sum with continuous elements',
-    'Binary tree lowest common ancestor',
+    'Container with most water problem',
     'Two pointers on palindrome string',
     'LRU Cache implementation',
   ];
