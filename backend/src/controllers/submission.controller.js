@@ -1,5 +1,7 @@
 const Submission = require('../models/Submission');
 const Problem = require('../models/Problem');
+const User = require('../models/User');
+const { executeSubmissionSchema } = require('../validators/submission.schema');
 const { judgeSolution } = require('../services/execution/judge.service');
 const { successResponse, errorResponse } = require('../utils/response');
 
@@ -36,10 +38,12 @@ const executeSubmission = async (req, res, next) => {
   try {
     const problem = await Problem.findOne({ _id: req.params.problemId, ownerId: req.user._id });
     if (!problem) return errorResponse(res, 'NOT_FOUND', 'Problem not found', 404);
-    const { code, customTests = [], submit = false } = req.body || {};
+
+    const { code, customTests, submit } = executeSubmissionSchema.parse(req.body);
+
     const tests = submit
       ? [...problem.visibleTests, ...problem.hiddenTests]
-      : customTests.length
+      : customTests && customTests.length
       ? customTests
       : problem.visibleTests;
 
@@ -51,6 +55,13 @@ const executeSubmission = async (req, res, next) => {
     });
 
     if (submit) {
+      // Check if user has already solved this problem prior to this submission
+      const alreadySolved = await Submission.exists({
+        userId: req.user._id,
+        problemId: problem._id,
+        status: 'ACCEPTED',
+      });
+
       await Submission.create({
         userId: req.user._id,
         problemId: problem._id,
@@ -62,6 +73,15 @@ const executeSubmission = async (req, res, next) => {
         memoryKb: result.memoryKb,
         compileOutput: result.compileOutput,
       });
+
+      // Increment stats: totalSubmissions always, and solvedProblems only on first AC
+      const statsUpdate = {
+        $inc: { 'stats.totalSubmissions': 1 },
+      };
+      if (result.status === 'ACCEPTED' && !alreadySolved) {
+        statsUpdate.$inc['stats.solvedProblems'] = 1;
+      }
+      await User.findByIdAndUpdate(req.user._id, statsUpdate);
 
       // Sanitize hidden tests so inputs and expected outputs are never leaked
       const sanitizedTestResults = (result.testResults || []).map((t) => {
@@ -83,7 +103,9 @@ const executeSubmission = async (req, res, next) => {
     }
 
     return successResponse(res, result);
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
 
 // GET /api/submissions/:id

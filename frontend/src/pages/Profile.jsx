@@ -1,9 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { User, Award, CheckCircle2, Code2, Calendar } from 'lucide-react';
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, checkSession } = useAuth();
+
+  useEffect(() => {
+    if (checkSession) {
+      checkSession();
+    }
+  }, [checkSession]);
 
   if (!user) return null;
 
